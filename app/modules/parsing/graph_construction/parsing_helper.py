@@ -107,16 +107,21 @@ class ParseHelper:
                 total_size += os.path.getsize(fp)
         return total_size
 
-    def check_commit_status_sync(self, project_id: str) -> bool:
+    def check_commit_status_sync(self, project_id: str, requested_commit_id: Optional[str] = None) -> bool:
         """
         Synchronous version of check_commit_status for use with asyncio.to_thread.
         Avoids blocking the event loop when called from async contexts.
+
+        Args:
+            project_id: The project ID to check.
+            requested_commit_id: Optional commit ID to match. If provided and matches
+                the current commit, returns True immediately without further checks.
         """
         logger.info(
             f"check_commit_status_sync: Checking commit status for project {project_id}"
         )
 
-        project = self.project_manager.get_project_from_db_by_id_sync(int(project_id) if isinstance(project_id, str) else project_id)
+        project = self.project_manager.get_project_from_db_by_id_sync(project_id)
         if not project:
             logger.error(f"Project with ID {project_id} not found")
             return False
@@ -129,6 +134,14 @@ class ParseHelper:
             f"check_commit_status_sync: Project {project_id} - repo={repo_name}, "
             f"branch={branch_name}, current_commit_id={current_commit_id}"
         )
+
+        # Short-circuit: if requested_commit_id matches current, no update needed
+        if requested_commit_id is not None and current_commit_id == requested_commit_id:
+            logger.info(
+                f"check_commit_status_sync: Requested commit {requested_commit_id} matches "
+                f"current {current_commit_id}, short-circuit returning True"
+            )
+            return True
 
         # If no branch, it's a pinned commit
         if not branch_name:
